@@ -22,7 +22,7 @@ class PolishedScientificCalculator:
 
         # Buttons frame
         btns_frame = tk.Frame(root)
-        btns_frame.pack()
+        btns_frame.pack(expand=True, fill='both')
 
         self.buttons = [
             ['7','8','9','/','√','!'],
@@ -42,18 +42,16 @@ class PolishedScientificCalculator:
 
         for r, row in enumerate(self.buttons):
             row_frame = tk.Frame(btns_frame)
-            row_frame.pack(expand=True, fill="both")
+            row_frame.pack(expand=True, fill='both')
             for c, btn_text in enumerate(row):
                 color = self.get_color(btn_text)
                 btn = tk.Button(row_frame, text=btn_text, font=("Arial", 16), width=6, height=2,
                                 bg=color, activebackground="yellow",
                                 command=lambda x=btn_text: self.on_click(x))
                 btn.grid(row=r, column=c, sticky="nsew", padx=2, pady=2)
-
-        # Grid weight
-        for i in range(7):
-            btns_frame.rowconfigure(i, weight=1)
-            btns_frame.columnconfigure(i, weight=1)
+                # Optional: hover effect
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg="lightblue"))
+                btn.bind("<Leave>", lambda e, b=btn, t=btn_text: b.config(bg=self.get_color(t)))
 
         # Keyboard support
         self.root.bind("<Key>", self.on_keypress)
@@ -98,7 +96,7 @@ class PolishedScientificCalculator:
             self.entry.insert(tk.END, char)
 
     def flash_button(self, char):
-        # Optional: implement visual flash effect if desired
+        # Optional visual feedback for button press
         pass
 
     def on_keypress(self, event):
@@ -115,16 +113,13 @@ class PolishedScientificCalculator:
 
     def calculate(self):
         try:
-            expr = self.expression.replace('^','**').replace('//','//')
-            expr = expr.replace('√','math.sqrt(')+')'*(self.expression.count('√'))
+            expr = self.expression
+            expr = expr.replace('^','**')
             expr = self.replace_factorial(expr)
-            expr = expr.replace('sin','math.sin(math.radians')
-            expr = expr.replace('cos','math.cos(math.radians')
-            expr = expr.replace('tan','math.tan(math.radians')
-            expr = expr.replace('log','math.log10')
-            expr = expr.replace('ln','math.log')
+            expr = self.replace_functions(expr)
 
-            result = eval(expr)
+            # Evaluate safely
+            result = eval(expr, {"__builtins__":None}, {"math": math})
             self.entry.delete(0, tk.END)
             self.entry.insert(tk.END, str(result))
             self.history.append(f"{self.expression} = {result}")
@@ -136,13 +131,29 @@ class PolishedScientificCalculator:
             self.expression = ""
 
     def replace_factorial(self, expr):
-        while '!' in expr:
-            idx = expr.index('!')
-            start = idx-1
-            while start >=0 and (expr[start].isdigit() or expr[start]=='.'):
-                start -=1
-            number = expr[start+1:idx]
-            expr = expr[:start+1] + f"math.factorial(int({number}))" + expr[idx+1:]
+        import re
+        pattern = r"(\d+)!+"
+        while re.search(pattern, expr):
+            match = re.search(pattern, expr)
+            number = match.group(1)
+            expr = expr[:match.start()] + f"math.factorial(int({number}))" + expr[match.end():]
+        return expr
+
+    def replace_functions(self, expr):
+        replacements = {
+            '√': 'math.sqrt(',
+            'sin': 'math.sin(math.radians(',
+            'cos': 'math.cos(math.radians(',
+            'tan': 'math.tan(math.radians(',
+            'log': 'math.log10(',
+            'ln': 'math.log('
+        }
+        for k, v in replacements.items():
+            expr = expr.replace(k, v)
+        # Close parentheses for functions
+        open_parens = expr.count('(')
+        close_parens = expr.count(')')
+        expr += ')' * (open_parens - close_parens)
         return expr
 
     def update_history_panel(self):
@@ -160,7 +171,6 @@ class PolishedScientificCalculator:
             with open(file, "w") as f:
                 f.write("\n".join(self.history))
             messagebox.showinfo("Export History", f"History exported to {file}")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
