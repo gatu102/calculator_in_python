@@ -1,158 +1,200 @@
 import tkinter as tk
-from tkinter import messagebox, scrolledtext, filedialog
+from tkinter import messagebox, scrolledtext
 import math
+from datetime import datetime
 
-class PolishedScientificCalculator:
+
+class ScientificCalculator:
     def __init__(self, root):
         self.root = root
-        self.root.title("Polished Scientific Calculator")
-        self.root.geometry("550x650")
+        self.root.title("Scientific Calculator")
+        self.root.geometry("520x650")
         self.root.resizable(False, False)
         self.expression = ""
-        self.memory = 0
+        self.memory = 0.0
         self.history = []
 
-        self.create_display()
-        self.create_history_panel()
+        # --- Display ---
+        self.entry = tk.Entry(
+            root, font=("Consolas", 24), borderwidth=4, relief="ridge", justify="right"
+        )
+        self.entry.pack(fill="x", ipadx=8, ipady=12, pady=10, padx=10)
+
+        # --- History Panel ---
+        self.history_panel = scrolledtext.ScrolledText(
+            root, height=7, state="disabled", font=("Consolas", 12)
+        )
+        self.history_panel.pack(fill="both", padx=10, pady=5)
+
+        # --- Buttons ---
         self.create_buttons()
-        self.root.bind("<Key>", self.on_keypress)
 
-    # ------------------ Display & History ------------------
-    def create_display(self):
-        self.entry = tk.Entry(self.root, font=("Arial", 24), borderwidth=2, relief="ridge")
-        self.entry.pack(fill="both", ipadx=8, pady=10, padx=10)
-
-    def create_history_panel(self):
-        self.history_panel = scrolledtext.ScrolledText(self.root, height=8, state='disabled', font=("Arial", 12))
-        self.history_panel.pack(fill='both', padx=10, pady=5)
-
-    # ------------------ Buttons ------------------
+    # ----------------------------------------------------------
+    # BUTTONS
+    # ----------------------------------------------------------
     def create_buttons(self):
-        btns_frame = tk.Frame(self.root)
-        btns_frame.pack()
-        self.buttons = [
-            ['7','8','9','/','√','!'],
-            ['4','5','6','*','^','%'],
-            ['1','2','3','-','sin','cos'],
-            ['0','.','=','+','tan','log'],
-            ['AC','C','M+','M-','MR','ln','Export']
+        btns_frame = tk.Frame(self.root, bg="#f0f0f0")
+        btns_frame.pack(expand=True, fill="both")
+
+        buttons = [
+            ["7", "8", "9", "/", "√", "!"],
+            ["4", "5", "6", "*", "^", "%"],
+            ["1", "2", "3", "-", "sin", "cos"],
+            ["0", ".", "=", "+", "tan", "log"],
+            ["AC", "C", "M+", "M-", "MR", "ln"],
+            ["π", "e", "(", ")", "x²", "x³"],
         ]
-        self.button_colors = {
-            "numbers":"#d3d3d3",
-            "operators":"#ffb347",
-            "scientific":"#add8e6",
-            "memory":"#90ee90",
-            "others":"#f0f0f0"
+
+        for r, row in enumerate(buttons):
+            for c, text in enumerate(row):
+                tk.Button(
+                    btns_frame,
+                    text=text,
+                    font=("Segoe UI", 14, "bold"),
+                    width=6,
+                    height=2,
+                    bg="#dcdcdc" if text not in ["=", "AC", "C"] else "#ffcccb",
+                    activebackground="#b0e0e6",
+                    command=lambda x=text: self.on_click(x),
+                ).grid(row=r, column=c, padx=3, pady=3, sticky="nsew")
+
+        for i in range(6):
+            btns_frame.rowconfigure(i, weight=1)
+            btns_frame.columnconfigure(i, weight=1)
+
+    # ----------------------------------------------------------
+    # LOGIC HANDLERS
+    # ----------------------------------------------------------
+    def on_click(self, char):
+        if char == "C":  # Clear current entry
+            self.entry.delete(0, tk.END)
+            self.expression = ""
+            return
+
+        if char == "AC":  # All clear
+            self.entry.delete(0, tk.END)
+            self.expression = ""
+            self.history.clear()
+            self.update_history_panel()
+            return
+
+        if char == "=":
+            self.calculate()
+            return
+
+        if char in {"M+", "M-", "MR"}:
+            self.memory_ops(char)
+            return
+
+        if char in {"√", "!", "sin", "cos", "tan", "log", "ln", "x²", "x³"}:
+            self.insert_function(char)
+            return
+
+        if char in {"π", "e"}:
+            self.entry.insert(tk.END, str(math.pi if char == "π" else math.e))
+            self.expression += str(math.pi if char == "π" else math.e)
+            return
+
+        self.entry.insert(tk.END, char)
+        self.expression += str(char)
+
+    def insert_function(self, func):
+        mapping = {
+            "√": "sqrt(",
+            "!": "factorial(",
+            "sin": "sin(",
+            "cos": "cos(",
+            "tan": "tan(",
+            "log": "log10(",
+            "ln": "log(",
+            "x²": "**2",
+            "x³": "**3",
         }
 
-        for r, row in enumerate(self.buttons):
-            row_frame = tk.Frame(btns_frame)
-            row_frame.pack(expand=True, fill="both")
-            for c, btn_text in enumerate(row):
-                color = self.get_color(btn_text)
-                btn = tk.Button(row_frame, text=btn_text, font=("Arial", 16), width=6, height=2,
-                                bg=color, activebackground="yellow",
-                                command=lambda x=btn_text: self.on_click(x))
-                btn.grid(row=r, column=c, sticky="nsew", padx=2, pady=2)
+        if func in {"x²", "x³"}:
+            self.entry.insert(tk.END, mapping[func])
+            self.expression += mapping[func]
+        elif func == "!":
+            self.entry.insert(tk.END, "!")
+            self.expression += "!"
+        else:
+            self.entry.insert(tk.END, func + "(")
+            self.expression += mapping[func]
 
-    def get_color(self, text):
-        if text in "0123456789.": return self.button_colors["numbers"]
-        elif text in "+-*/^%//": return self.button_colors["operators"]
-        elif text in ['√','!','sin','cos','tan','log','ln']: return self.button_colors["scientific"]
-        elif text in ['M+','M-','MR']: return self.button_colors["memory"]
-        else: return self.button_colors["others"]
-
-    # ------------------ Button & Key Actions ------------------
-    def on_click(self, char):
-        if char == 'C': self.clear_entry()
-        elif char == 'AC': self.clear_all()
-        elif char == '=': self.calculate()
-        elif char in ['M+','M-','MR']: self.memory_actions(char)
-        elif char == 'Export': self.export_history()
-        else: self.insert_expression(char)
-
-    def on_keypress(self, event):
-        key = event.char
-        if key in '0123456789.+-*/%^':
-            self.insert_expression(key)
-        elif key == '\r': self.calculate()
-        elif key == '\x08':  # Backspace
-            self.expression = self.expression[:-1]
-            self.update_entry()
-
-    def insert_expression(self, char):
-        self.expression += char
-        self.update_entry()
-
-    def update_entry(self):
-        self.entry.delete(0, tk.END)
-        self.entry.insert(0, self.expression)
-
-    def clear_entry(self):
-        self.expression = ""
-        self.update_entry()
-
-    def clear_all(self):
-        self.expression = ""
-        self.history.clear()
-        self.update_entry()
-        self.update_history_panel()
-
-    def memory_actions(self, action):
+    def memory_ops(self, op):
         try:
-            val = float(self.entry.get())
-        except: val = 0
-        if action == 'M+': self.memory += val
-        elif action == 'M-': self.memory -= val
-        elif action == 'MR': self.insert_expression(str(self.memory))
+            val = float(self.entry.get() or 0)
+            if op == "M+":
+                self.memory += val
+            elif op == "M-":
+                self.memory -= val
+            elif op == "MR":
+                self.entry.insert(tk.END, str(self.memory))
+                self.expression += str(self.memory)
+            self.show_status(f"Memory: {self.memory:.2f}")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid memory operation!")
 
-    # ------------------ Calculation ------------------
+    # ----------------------------------------------------------
+    # CALCULATIONS
+    # ----------------------------------------------------------
     def calculate(self):
         try:
-            expr = self.expression
-            expr = expr.replace('^','**').replace('√','math.sqrt(')+')'*(self.expression.count('√'))
-            expr = self.replace_factorial(expr)
-            for func in ['sin','cos','tan']:
-                expr = expr.replace(func,f"math.{func}(math.radians")
-            expr = expr.replace('log','math.log10').replace('ln','math.log')
-            result = eval(expr)
-            self.expression = str(result)
-            self.update_entry()
-            self.history.append(f"{expr} = {result}")
-            self.update_history_panel()
-        except Exception as e:
-            messagebox.showerror("Error", f"Invalid Expression!\n{e}")
-            self.clear_entry()
+            expr = self.entry.get().replace("^", "**")
 
-    def replace_factorial(self, expr):
-        while '!' in expr:
-            idx = expr.index('!')
-            start = idx-1
-            while start>=0 and (expr[start].isdigit() or expr[start]=='.'):
-                start -=1
-            number = expr[start+1:idx]
-            expr = expr[:start+1] + f"math.factorial(int({number}))" + expr[idx+1:]
+            # Safe math replacements
+            expr = expr.replace("sqrt", "math.sqrt")
+            expr = expr.replace("factorial", "math.factorial")
+            expr = expr.replace("sin", "math.sin(math.radians")
+            expr = expr.replace("cos", "math.cos(math.radians")
+            expr = expr.replace("tan", "math.tan(math.radians")
+            expr = expr.replace("log10", "math.log10")
+            expr = expr.replace("log", "math.log")
+
+            # Fix unmatched parentheses
+            if expr.count("(") > expr.count(")"):
+                expr += ")" * (expr.count("(") - expr.count(")"))
+
+            # Factorial cleanup
+            expr = self.replace_factorials(expr)
+
+            result = eval(expr, {"math": math})
+            self.entry.delete(0, tk.END)
+            self.entry.insert(tk.END, str(result))
+            self.history.append(f"[{datetime.now().strftime('%H:%M:%S')}] {self.expression} = {result}")
+            self.update_history_panel()
+            self.expression = str(result)
+        except Exception as e:
+            messagebox.showerror("Error", f"Invalid Expression:\n{e}")
+            self.entry.delete(0, tk.END)
+            self.expression = ""
+
+    def replace_factorials(self, expr):
+        while "!" in expr:
+            idx = expr.index("!")
+            num_end = idx
+            num_start = idx - 1
+            while num_start >= 0 and (expr[num_start].isdigit() or expr[num_start] in "."):
+                num_start -= 1
+            number = expr[num_start + 1:num_end]
+            expr = expr[:num_start + 1] + f"math.factorial(int({number}))" + expr[num_end + 1:]
         return expr
 
-    # ------------------ History ------------------
+    # ----------------------------------------------------------
+    # HISTORY PANEL
+    # ----------------------------------------------------------
     def update_history_panel(self):
-        self.history_panel.config(state='normal')
+        self.history_panel.config(state="normal")
         self.history_panel.delete(1.0, tk.END)
-        self.history_panel.insert(tk.END, "\n".join(self.history[-20:]))
-        self.history_panel.config(state='disabled')
+        for entry in reversed(self.history[-15:]):
+            self.history_panel.insert(tk.END, entry + "\n")
+        self.history_panel.config(state="disabled")
 
-    def export_history(self):
-        if not self.history:
-            messagebox.showinfo("Export History","No history to export.")
-            return
-        file = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files","*.txt")])
-        if file:
-            with open(file, "w") as f:
-                f.write("\n".join(self.history))
-            messagebox.showinfo("Export History", f"History exported to {file}")
+    def show_status(self, msg):
+        self.root.title(f"Scientific Calculator — {msg}")
 
-# ------------------ Run ------------------
+
 if __name__ == "__main__":
     root = tk.Tk()
-    PolishedScientificCalculator(root)
+    app = ScientificCalculator(root)
     root.mainloop()
